@@ -1,0 +1,7 @@
+[Core]
+Name = seat
+Module = seat
+
+[Documentation]
+Description = seat
+         

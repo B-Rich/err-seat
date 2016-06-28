@@ -33,3 +33,6 @@ Seat API to errbot interface
 ## misc
 only tested against discord.py with errbot 4.1.3+.  
 Keep in mind that eve api and seat api data is delayed.
+
+## Contact
+If you got questions catch me on gitter https://gitter.im/errbotio/errbot
