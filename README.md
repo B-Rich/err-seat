@@ -7,12 +7,16 @@ You need errbot and eveseat please see the following links for setting that up:
 *  http://seat-docs.readthedocs.io/en/latest/
 
 ## Connecting / Configuration
-Under <yourseatdomain>/api-admin add the ip of your errbot. 
-In the seat.py you need to set the api url and the token you just generated. Aswell set the reporting channel as you need.   
+Under https://yourseatdomain.com/api-admin add the ip of your errbot instance.
+In the seat.py you need to set the api url and the token you just generated plus the additional settings.
 Example:
 ```
-seat_url = https://<yourseatdomain>/api/v1
-seat_token = <yourtoken>
+!plugin config seat
+{'FUEL_THRESHOLD': '12',
+ 'REPORT_POS_CHAN': '#starbases',
+ 'REPORT_REINF_CHANNEL': '#fleetcommand',
+ 'SEAT_TOKEN': 'JSjklasjdklasdljkljd2323',
+ 'SEAT_URL': 'https://seat.mydomain.com/api/v1'}
 ```
 
 ## Help Call Example
@@ -29,6 +33,7 @@ Seat API to errbot interface
 - !pos silencefuel - Silences the out of fuel notification for a tower: Usage !pos silencefuel <Po...
 - !pos silencefull - Silences notification if a silo/coupling array is full: Usage !pos silenceful...
 - !pos silencesiphon - Silences the siphon notification for a tower: Usage !pos silencesiphon <PosID>
+plus a few admin commands which are documented in the code itself.
 
 ## misc
 only tested against discord.py with errbot 4.1.3+.  

@@ -2,26 +2,14 @@ import requests
 from errbot import BotPlugin, botcmd
 import datetime
 
-########################################################################################################################
-## Plugin Config
-# url to your seat instance
-seat_url = ''
-# seat api token
-seat_token = ''
-# seat header (don't change)
-seat_headers = {'X-Token': seat_token, 'Accept': 'application/json'}
-# threshold before reporting out of fuel(hours)
-fuel_threshold = 12
-# reporting channels
-report_pos_channel = '<channel for pos events, i.e. "#ops">'
-report_reinf_channel = '<channel for reporting reinforcement, i.e. "#fc">'
 
-class seat(BotPlugin):
+class Seat(BotPlugin):
     """Seat API to errbot interface"""
 
     def activate(self):
-        super(seat, self).activate()
+        super(Seat, self).activate()
         # populate all data at startup
+        self.seat_headers = {'X-Token': self.config['SEAT_TOKEN'], 'Accept': 'application/json'}
         self['starbases'] = {}
         self['pocos'] = {}
         self._poller_fetch_starbases()
@@ -42,48 +30,57 @@ class seat(BotPlugin):
             3600,
             self._poller_check_silos
         )
+
+    ####################################################################################################################
+    # Configuration
+    def get_configuration_template(self):
+        return {'SEAT_TOKEN': '<your_seat_token>', 'SEAT_URL': '<your_seat_url>', 'FUEL_THRESHOLD': '12',
+                'REPORT_POS_CHAN': '<yourchannel>', 'REPORT_REINF_CHANNEL': '<yourchannel>'}
+
     ####################################################################################################################
     # Helpers
     def _get_seat_all_corps(self):
         try:
-            r = requests.get(seat_url + "/corporation/all", headers=seat_headers)
+            r = requests.get(self.config['SEAT_URL'] + "/corporation/all", headers=self.seat_headers)
             return r.json()
         except requests.exceptions.RequestException as e:
             print(e)
 
     def _get_seat_all_starbases(self, corpid):
         try:
-            r = requests.get(seat_url + "/corporation/starbases/" + str(corpid), headers=seat_headers)
+            r = requests.get(self.config['SEAT_URL'] + "/corporation/starbases/" + str(corpid),
+                             headers=self.seat_headers)
             return r.json()
         except requests.exceptions.RequestException as e:
             print(e)
 
     def _get_seat_all_assets(self, corpid):
         try:
-            r = requests.get(seat_url + "/corporation/assets/" + str(corpid), headers=seat_headers)
+            r = requests.get(self.config['SEAT_URL'] + "/corporation/assets/" + str(corpid), headers=self.seat_headers)
             return r.json()
         except requests.exceptions.RequestException as e:
             print(e)
 
     def _get_seat_pos_contents(self, corpid, posid):
         try:
-            r = requests.get(seat_url + "/corporation/starbases/" + str(corpid) + "/" + str(posid),
-                             headers=seat_headers)
+            r = requests.get(self.config['SEAT_URL'] + "/corporation/starbases/" + str(corpid) + "/" + str(posid),
+                             headers=self.seat_headers)
             return r.json()
         except requests.exceptions.RequestException as e:
             print(e)
 
     def _get_seat_silo_contents(self, corpid, siloid):
         try:
-            r = requests.get(seat_url + "/corporation/assets-contents/" + str(corpid) + "/" + str(siloid),
-                             headers=seat_headers)
+            r = requests.get(
+                self.config['SEAT_URL'] + "/corporation/assets-contents/" + str(corpid) + "/" + str(siloid),
+                headers=self.seat_headers)
             return r.json()
         except requests.exceptions.RequestException as e:
             print(e)
 
     def _get_seat_all_pocos(self, corpid):
         try:
-            r = requests.get(seat_url + "/corporation/pocos/" + str(corpid), headers=seat_headers)
+            r = requests.get(self.config['SEAT_URL'] + "/corporation/pocos/" + str(corpid), headers=self.seat_headers)
             return r.json()
         except requests.exceptions.RequestException as e:
             print(e)
@@ -201,12 +198,13 @@ class seat(BotPlugin):
                               planetTypeName=poco['planetTypeName'], reinforceHour=poco['reinforceHour'],
                               solarSystemName=poco['solarSystemName'])
 
-    def _poller_check_pos(self, threshold=fuel_threshold):
+    def _poller_check_pos(self, thresholdtmp=None):
+        threshold = thresholdtmp if thresholdtmp else self.config['FUEL_THRESHOLD']
         for starbase in self.get_all_starbases():
             # check fuelage
             fuel_left = self.pos_fuel_hours_left(starbase['id'])  #
             if int(fuel_left) < threshold and int(fuel_left) != 0 and starbase['warn_fuel'] is True:
-                self.send(self.build_identifier(report_pos_channel),
+                self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                           "**Fuel:** Tower is running out of fuel in %s hours - %s - %s - %s | Use *!pos silencefuel %s* to mute" % (
                               round(fuel_left), starbase['moon'], starbase['type'], starbase['corp'], starbase['id'],))
             # assume refilled
@@ -214,38 +212,38 @@ class seat(BotPlugin):
                 starbases = self['starbases']
                 starbases[starbase['id']]['warn_fuel'] = True
                 self['starbases'] = starbases
-            # check reinforment
+            # check reinforcement
             elif starbase['state'] == 3 and starbase['warn_reinf'] is True:
-                self.send(self.build_identifier(report_reinf_channel),
+                self.send(self.build_identifier(self.config['REPORT_REINF_CHAN']),
                           "**Reinforced:** %s - %s - %s got reinforced. Timer: %s" % (
                               starbase['moon'], starbase['type'], starbase['corp'], starbase['stateTimeStamp']))
                 starbases = self['starbases']
                 starbases[starbase['id']]['warn_reinf'] = False
                 self['starbases'] = starbases
-            # check for outdated while ignoring offline/anchored
+            # check for outdated while ignoring offline/anchored because they don't update their timestamp
             elif starbase['outdated'] is True and (starbase['state'] == 4 or starbase['state'] == 3):
-                self.send(self.build_identifier(report_pos_channel),
+                self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                           "**Outdated**: %s - %s - %s is outdated, please check corp key" % (
-                          starbase['moon'], starbase['type'], starbase['corp']))
+                              starbase['moon'], starbase['type'], starbase['corp']))
 
     def _poller_check_silos(self):
         for starbase in self.get_all_starbases():
             poscontent = self._get_seat_pos_contents(starbase['corpid'], starbase['id'])
             try:
                 for module in poscontent['modules']:
-                    # 14343 for silo, 17982 for coupling
+                    # 14343 for silo, 17982 for coupling arrays
                     if module['detail']['typeID'] == 14343 or module['detail']['typeID'] == 17982:
                         modulecontent = self._get_seat_silo_contents(starbase['corpid'], module['detail']['itemID'])
                         # check siphon
                         if modulecontent[0]['quantity'] % 100 != 0 and starbase['warn_siphon'] is True:
-                            self.send(self.build_identifier(report_pos_channel),
+                            self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                                       "**Siphon:** Possible siphon detected: %s - %s - %s | Use *!pos silencesiphon %s* to mute" % (
                                           starbase['moon'], starbase['type'], starbase['corp'],
                                           starbase['id']))
                         # check for full
                         elif modulecontent[0]['quantity'] == module['detail']['capacity'] and starbase[
                             'warn_full'] is True:
-                            self.send(self.build_identifier(report_pos_channel),
+                            self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                                       "**Full:** Silo/CouplingArray is full: %s - %s - %s | Use *!pos silencefull %s* to mute" % (
                                           starbase['moon'], starbase['type'], starbase['corp'],
                                           starbase['id']))
@@ -299,7 +297,7 @@ class seat(BotPlugin):
             try:
                 if poco['solarsystem'].lower() == args.lower():
                     results += 1
-                    yield "**Location:** %s - %s **Type:** %s **Corp:** %s **Reinforment**: set to %sh" % (
+                    yield "**Location:** %s - %s **Type:** %s **Corp:** %s **Reinforcement**: set to %sh" % (
                         poco['solarsystem'], poco['planetName'], poco['planetTypeName'], poco['corp'],
                         poco['reinforceHour'])
             except:
@@ -381,7 +379,7 @@ class seat(BotPlugin):
     def pos_triggerfuelcheck(self, msg, args):
         """Manually executes the scheduled fuel / reinforcement check"""
         if args == '' or args.isdigit() is False:
-            args = fuel_threshold
+            args = self.config['FUEL_THRESHOLD']
         self._poller_check_pos(int(args))
         return "Ran manual pos check with %s hours." % args
 
@@ -389,6 +387,7 @@ class seat(BotPlugin):
     def pos_triggersilocheck(self, msg, args):
         """Manually executes the scheduled silo check"""
         if args == '' or args.isdigit() is False:
-            args = fuel_threshold
+            args = self.config['FUEL_THRESHOLD']
         self._poller_check_silos()
         return "Ran manual silo check."
+
