@@ -35,7 +35,7 @@ class Seat(BotPlugin):
     # Configuration
     def get_configuration_template(self):
         return {'SEAT_TOKEN': '<your_seat_token>', 'SEAT_URL': '<your_seat_url>', 'FUEL_THRESHOLD': '12',
-                'REPORT_POS_CHAN': '<yourchannel>', 'REPORT_REINF_CHANNEL': '<yourchannel>'}
+                'REPORT_POS_CHAN': '<yourchannel>', 'REPORT_REINF_CHAN': '<yourchannel>'}
 
     ####################################################################################################################
     # Helpers
@@ -202,7 +202,7 @@ class Seat(BotPlugin):
         threshold = thresholdtmp if thresholdtmp else self.config['FUEL_THRESHOLD']
         for starbase in self.get_all_starbases():
             # check fuelage
-            fuel_left = self.pos_fuel_hours_left(starbase['id'])  #
+            fuel_left = self.pos_fuel_hours_left(starbase['id'])
             if int(fuel_left) < threshold and int(fuel_left) != 0 and starbase['warn_fuel'] is True:
                 self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                           "**Fuel:** Tower is running out of fuel in %s hours - %s - %s - %s | Use *!pos silencefuel %s* to mute" % (
