@@ -1,10 +1,17 @@
 import requests
-from errbot import BotPlugin, botcmd
+from errbot import BotPlugin, botcmd, cmdfilter
 import datetime
 
 
 class Seat(BotPlugin):
     """Seat API to errbot interface"""
+
+    # None of these commands should be executable via private message
+    @cmdfilter
+    def public_only(self, msg, cmd, args, dry_run):
+        if msg.is_direct:
+            return None, None, None  # blocks the command
+        return msg, cmd, args
 
     def activate(self):
         super(Seat, self).activate()
