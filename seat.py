@@ -6,13 +6,6 @@ import datetime
 class Seat(BotPlugin):
     """Seat API to errbot interface"""
 
-    # None of these commands should be executable via private message
-    @cmdfilter
-    def public_only(self, msg, cmd, args, dry_run):
-        if msg.is_direct:
-            return None, None, None  # blocks the command
-        return msg, cmd, args
-
     def activate(self):
         super(Seat, self).activate()
         # populate all data at startup
@@ -110,12 +103,14 @@ class Seat(BotPlugin):
         warn_reinf = True
         warn_full = True
         warn_siphon = True
+        warn_stront = True
         starbasetmp = self['starbases'].get(itemid)
         if starbasetmp is not None:
             warn_fuel = starbasetmp['warn_fuel']
             warn_reinf = starbasetmp['warn_reinf']
             warn_full = starbasetmp['warn_full']
             warn_siphon = starbasetmp['warn_siphon']
+            warn_stront = starbasetmp['warn_stront']
         # check if data is outdated
         outdated = False
         postime = datetime.datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S")
@@ -143,6 +138,7 @@ class Seat(BotPlugin):
             "warn_full": warn_full,
             "warn_siphon": warn_siphon,
             "warn_reinf": warn_reinf,
+            "warn_stront": warn_stront,
             "outdated": outdated,
         }
         self.store_starbase(starbase)
@@ -219,6 +215,11 @@ class Seat(BotPlugin):
                 starbases = self['starbases']
                 starbases[starbase['id']]['warn_fuel'] = True
                 self['starbases'] = starbases
+            # assume restronted
+            elif starbase['strontium'] == 0 and starbase['warn_stront'] is False:
+                starbases = self['starbases']
+                starbases[starbase['id']]['warn_stront'] = True
+                self['starbases'] = starbases
             # check reinforcement
             elif starbase['state'] == 3 and starbase['warn_reinf'] is True:
                 self.send(self.build_identifier(self.config['REPORT_REINF_CHAN']),
@@ -227,11 +228,15 @@ class Seat(BotPlugin):
                 starbases = self['starbases']
                 starbases[starbase['id']]['warn_reinf'] = False
                 self['starbases'] = starbases
-            # check for outdated while ignoring offline/anchored because they don't update their timestamp
+            # check for outdated
             elif starbase['outdated'] is True and (starbase['state'] == 4 or starbase['state'] == 3):
                 self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                           "**Outdated**: %s - %s - %s is outdated, please check corp key" % (
                               starbase['moon'], starbase['type'], starbase['corp']))
+            # check for empty stront
+            if starbase['strontium'] == 0 and starbase['state'] == 4:
+                yield "**Location:** %s **Type:** %s **Corp:** %s **Name:** %s has no strontium." % (
+                    starbase['moon'], starbase['type'], starbase['corp'], starbase['name'])
 
     def _poller_check_silos(self):
         for starbase in self.get_all_starbases():
@@ -320,11 +325,33 @@ class Seat(BotPlugin):
         if args == '' or args.isdigit() is False:
             yield 'Usage: !pos oof <hours>'
             return
+        results = 0
         for starbase in self.get_all_starbases():
             hours_left = self.pos_fuel_hours_left(starbase['id'])
             if int(hours_left) < int(args) and int(hours_left) != 0:
+                results += 1
                 yield "**Location:** %s **Type:** %s **Corp:** %s **Name:** %s **Hours of fuel left:** %s" % (
                     starbase['moon'], starbase['type'], starbase['corp'], starbase['name'], round(hours_left))
+            if results == 0:
+                yield "Did not found any towers."
+            else:
+                yield "Found %s starbases total." % results
+    @botcmd
+    def pos_oos(self, msg, args):
+        """Finds all towers that have no stront, Usage: !pos oos"""
+        if args != '':
+            yield 'Usage: !pos oos'
+            return
+        results = 0
+        for starbase in self.get_all_starbases():
+            if starbase['strontium'] == 0 and starbase['state'] == 4:
+                results += 1
+                yield "**Location:** %s **Type:** %s **Corp:** %s **Name:** %s has no strontium." % (
+                    starbase['moon'], starbase['type'], starbase['corp'], starbase['name'])
+        if results == 0:
+            yield "Did not found any towers without stront."
+        else:
+            yield "Found %s starbases total." % results
 
     @botcmd
     def pos_offline(self, msg, args):
@@ -367,6 +394,17 @@ class Seat(BotPlugin):
         args = int(args)
         starbases = self['starbases']
         starbases[args]['warn_full'] = False
+        self['starbases'] = starbases
+        return "Silenced %s" % starbases[args]['moon']
+
+    @botcmd
+    def pos_silencestront(self, msg, args):
+        """Silences notification for empty strontbays: Usage !pos silencestront <PosID>"""
+        if args == '' or args.isdigit() is False:
+            return 'Usage: !pos silencestront <posID>'
+        args = int(args)
+        starbases = self['starbases']
+        starbases[args]['warn_stront'] = False
         self['starbases'] = starbases
         return "Silenced %s" % starbases[args]['moon']
 
