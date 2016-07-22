@@ -23,12 +23,12 @@ class Seat(BotPlugin):
             self._poller_fetch_pocos
         )
         self.start_poller(
-            3600,
+            1800,
             self._poller_check_pos
         )
         self.start_poller(
-            3600,
-            self._poller_check_silos
+            1800,
+            self.__poller_check_pos_modules
         )
 
     ####################################################################################################################
@@ -38,7 +38,7 @@ class Seat(BotPlugin):
                 'REPORT_POS_CHAN': '<yourchannel>', 'REPORT_REINF_CHAN': '<yourchannel>'}
 
     ####################################################################################################################
-    # Helpers
+    # Api Calls
     def _get_seat_all_corps(self):
         try:
             r = requests.get(self.config['SEAT_URL'] + "/corporation/all", headers=self.seat_headers)
@@ -54,9 +54,9 @@ class Seat(BotPlugin):
         except requests.exceptions.RequestException as e:
             print(e)
 
-    def _get_seat_all_assets(self, corpid):
+    def _get_seat_all_pocos(self, corpid):
         try:
-            r = requests.get(self.config['SEAT_URL'] + "/corporation/assets/" + str(corpid), headers=self.seat_headers)
+            r = requests.get(self.config['SEAT_URL'] + "/corporation/pocos/" + str(corpid), headers=self.seat_headers)
             return r.json()
         except requests.exceptions.RequestException as e:
             print(e)
@@ -78,13 +78,8 @@ class Seat(BotPlugin):
         except requests.exceptions.RequestException as e:
             print(e)
 
-    def _get_seat_all_pocos(self, corpid):
-        try:
-            r = requests.get(self.config['SEAT_URL'] + "/corporation/pocos/" + str(corpid), headers=self.seat_headers)
-            return r.json()
-        except requests.exceptions.RequestException as e:
-            print(e)
-
+    ####################################################################################################################
+    # Helpers
     def pos_fuel_hours_left(self, itemid):
         starbase = self['starbases'][itemid]
         hours_left = starbase['fuelBlocks'] / starbase['baseFuelUsage']
@@ -102,14 +97,12 @@ class Seat(BotPlugin):
         warn_fuel = True
         warn_reinf = True
         warn_full = True
-        warn_siphon = True
         warn_stront = True
         starbasetmp = self['starbases'].get(itemid)
         if starbasetmp is not None:
             warn_fuel = starbasetmp['warn_fuel']
             warn_reinf = starbasetmp['warn_reinf']
             warn_full = starbasetmp['warn_full']
-            warn_siphon = starbasetmp['warn_siphon']
             warn_stront = starbasetmp['warn_stront']
         # check if data is outdated
         outdated = False
@@ -136,7 +129,6 @@ class Seat(BotPlugin):
             "stateTimeStamp": stateTimeStamp,
             "warn_fuel": warn_fuel,
             "warn_full": warn_full,
-            "warn_siphon": warn_siphon,
             "warn_reinf": warn_reinf,
             "warn_stront": warn_stront,
             "outdated": outdated,
@@ -178,6 +170,7 @@ class Seat(BotPlugin):
     ####################################################################################################################
     # poller functions
     def _poller_fetch_starbases(self):
+        """Fetches all starbases"""
         corplist = self._get_seat_all_corps()
         for corp in corplist:
             starbaselist = self._get_seat_all_starbases(str(corp['corporationID']))
@@ -193,6 +186,7 @@ class Seat(BotPlugin):
                                   state=starbase['state'], stateTimeStamp=starbase['stateTimeStamp'])
 
     def _poller_fetch_pocos(self):
+        """Fetches all pocos"""
         corplist = self._get_seat_all_corps()
         for corp in corplist:
             pocolist = self._get_seat_all_pocos(str(corp['corporationID']))
@@ -202,24 +196,15 @@ class Seat(BotPlugin):
                               solarSystemName=poco['solarSystemName'])
 
     def _poller_check_pos(self, thresholdtmp=None):
+        """Executes checks on the pos itself"""
         threshold = thresholdtmp if thresholdtmp else self.config['FUEL_THRESHOLD']
         for starbase in self.get_all_starbases():
-            # check fuelage
+            # check fuel
             fuel_left = self.pos_fuel_hours_left(starbase['id'])
             if int(fuel_left) < threshold and int(fuel_left) != 0 and starbase['warn_fuel'] is True:
                 self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                           "**Fuel:** Tower is running out of fuel in %s hours - %s - %s - %s | Use *!pos silencefuel %s* to mute" % (
                               round(fuel_left), starbase['moon'], starbase['type'], starbase['corp'], starbase['id'],))
-            # assume refilled
-            elif int(fuel_left) > threshold and starbase['warn_fuel'] is False:
-                starbases = self['starbases']
-                starbases[starbase['id']]['warn_fuel'] = True
-                self['starbases'] = starbases
-            # assume restronted
-            elif starbase['strontium'] == 0 and starbase['warn_stront'] is False:
-                starbases = self['starbases']
-                starbases[starbase['id']]['warn_stront'] = True
-                self['starbases'] = starbases
             # check reinforcement
             elif starbase['state'] == 3 and starbase['warn_reinf'] is True:
                 self.send(self.build_identifier(self.config['REPORT_REINF_CHAN']),
@@ -237,8 +222,19 @@ class Seat(BotPlugin):
             if starbase['strontium'] == 0 and starbase['state'] == 4:
                 yield "**Location:** %s **Type:** %s **Corp:** %s **Name:** %s has no strontium." % (
                     starbase['moon'], starbase['type'], starbase['corp'], starbase['name'])
+            # assume refilled
+            elif int(fuel_left) > threshold and starbase['warn_fuel'] is False:
+                starbases = self['starbases']
+                starbases[starbase['id']]['warn_fuel'] = True
+                self['starbases'] = starbases
+            # assume restronted
+            elif starbase['strontium'] == 0 and starbase['warn_stront'] is False:
+                starbases = self['starbases']
+                starbases[starbase['id']]['warn_stront'] = True
+                self['starbases'] = starbases
 
-    def _poller_check_silos(self):
+    def __poller_check_pos_modules(self):
+        """Executes checks on pos modules"""
         for starbase in self.get_all_starbases():
             poscontent = self._get_seat_pos_contents(starbase['corpid'], starbase['id'])
             try:
@@ -246,14 +242,8 @@ class Seat(BotPlugin):
                     # 14343 for silo, 17982 for coupling arrays
                     if module['detail']['typeID'] == 14343 or module['detail']['typeID'] == 17982:
                         modulecontent = self._get_seat_silo_contents(starbase['corpid'], module['detail']['itemID'])
-                        # check siphon
-                        if modulecontent[0]['quantity'] % 100 != 0 and starbase['warn_siphon'] is True:
-                            self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
-                                      "**Siphon:** Possible siphon detected: %s - %s - %s | Use *!pos silencesiphon %s* to mute" % (
-                                          starbase['moon'], starbase['type'], starbase['corp'],
-                                          starbase['id']))
                         # check for full
-                        elif modulecontent[0]['quantity'] == module['detail']['capacity'] and starbase[
+                        if modulecontent[0]['quantity'] == module['detail']['capacity'] and starbase[
                             'warn_full'] is True:
                             self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                                       "**Full:** Silo/CouplingArray is full: %s - %s - %s | Use *!pos silencefull %s* to mute" % (
@@ -264,11 +254,6 @@ class Seat(BotPlugin):
                             'warn_full'] is False:
                             starbases = self['starbases']
                             starbases[starbase['id']]['warn_full'] = True
-                            self['starbases'] = starbases
-                        # assume siphon killed
-                        elif modulecontent[0]['quantity'] % 100 == 0 and starbase['warn_siphon'] is False:
-                            starbases = self['starbases']
-                            starbases[starbase['id']]['warn_siphon'] = True
                             self['starbases'] = starbases
             except:
                 pass
@@ -336,6 +321,7 @@ class Seat(BotPlugin):
                 yield "Did not found any towers."
             else:
                 yield "Found %s starbases total." % results
+
     @botcmd
     def pos_oos(self, msg, args):
         """Finds all towers that have no stront, Usage: !pos oos"""
@@ -365,6 +351,32 @@ class Seat(BotPlugin):
                     starbase['moon'], starbase['type'], starbase['corp'], starbase['name'])
 
     @botcmd
+    def pos_checksiphon(self, msg, args):
+        """Locates possible siphons. Processing can take a while. Usage: !pos checksiphon"""
+        if args != '':
+            yield 'Usage: !pos checksiphon'
+            return
+        result = 0
+        for starbase in self.get_all_starbases():
+            poscontent = self._get_seat_pos_contents(starbase['corpid'], starbase['id'])
+            try:
+                for module in poscontent['modules']:
+                    # 14343 for silo, 17982 for coupling arrays
+                    if module['detail']['typeID'] == 14343 or module['detail']['typeID'] == 17982:
+                        modulecontent = self._get_seat_silo_contents(starbase['corpid'], module['detail']['itemID'])
+                        # check siphon
+                        if modulecontent[0]['quantity'] % 100 != 0:
+                            self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
+                                      "**Siphon:** Possible siphon detected: %s - %s - %s" % (
+                                          starbase['moon'], starbase['type'], starbase['corp']))
+                            result += 1
+            except:
+                pass
+        if result == 0:
+            yield "Did not find any siphons."
+
+    ## Silence Commands
+    @botcmd
     def pos_silencefuel(self, msg, args):
         """Silences the out of fuel notification for a tower: Usage !pos silencefuel <PosID>"""
         if args == '' or args.isdigit() is False:
@@ -372,17 +384,6 @@ class Seat(BotPlugin):
         args = int(args)
         starbases = self['starbases']
         starbases[args]['warn_fuel'] = False
-        self['starbases'] = starbases
-        return "Silenced %s" % starbases[args]['moon']
-
-    @botcmd
-    def pos_silencesiphon(self, msg, args):
-        """Silences the siphon notification for a tower: Usage !pos silencesiphon <PosID>"""
-        if args == '' or args.isdigit() is False:
-            return 'Usage: !pos silencesiphon <posID>'
-        args = int(args)
-        starbases = self['starbases']
-        starbases[args]['warn_siphon'] = False
         self['starbases'] = starbases
         return "Silenced %s" % starbases[args]['moon']
 
@@ -408,6 +409,7 @@ class Seat(BotPlugin):
         self['starbases'] = starbases
         return "Silenced %s" % starbases[args]['moon']
 
+    ## Admin Commands
     @botcmd(admin_only=True)
     def pos_refetch(self, msg, args):
         """Refetches seat pos API data"""
@@ -421,18 +423,13 @@ class Seat(BotPlugin):
         return "Refetched seat poco data"
 
     @botcmd(admin_only=True, hidden=True)
-    def pos_triggerfuelcheck(self, msg, args):
-        """Manually executes the scheduled fuel / reinforcement check"""
-        if args == '' or args.isdigit() is False:
-            args = self.config['FUEL_THRESHOLD']
-        self._poller_check_pos(int(args))
-        return "Ran manual pos check with %s hours." % args
+    def pos_triggerposcheck(self, msg, args):
+        """Manually executes the checks on the pos itself"""
+        self._poller_check_pos()
+        return "Ran manual pos check."
 
     @botcmd(admin_only=True, hidden=True)
-    def pos_triggersilocheck(self, msg, args):
-        """Manually executes the scheduled silo check"""
-        if args == '' or args.isdigit() is False:
-            args = self.config['FUEL_THRESHOLD']
-        self._poller_check_silos()
-        return "Ran manual silo check."
-
+    def pos_triggerposmodulecheck(self, msg, args):
+        """Manually executes the checks on various posmodules"""
+        self.__poller_check_pos_modules()
+        return "Ran manual pos module check."
