@@ -23,12 +23,12 @@ class Seat(BotPlugin):
             self._poller_fetch_pocos
         )
         self.start_poller(
-            1800,
+            3600,
             self._poller_check_pos
         )
         self.start_poller(
-            1800,
-            self.__poller_check_pos_modules
+            3600,
+            self._poller_check_pos_modules
         )
 
     ####################################################################################################################
@@ -233,7 +233,7 @@ class Seat(BotPlugin):
                 starbases[starbase['id']]['warn_stront'] = True
                 self['starbases'] = starbases
 
-    def __poller_check_pos_modules(self):
+    def _poller_check_pos_modules(self):
         """Executes checks on pos modules"""
         for starbase in self.get_all_starbases():
             poscontent = self._get_seat_pos_contents(starbase['corpid'], starbase['id'])
@@ -431,5 +431,5 @@ class Seat(BotPlugin):
     @botcmd(admin_only=True, hidden=True)
     def pos_triggerposmodulecheck(self, msg, args):
         """Manually executes the checks on various posmodules"""
-        self.__poller_check_pos_modules()
+        self._poller_check_pos_modules()
         return "Ran manual pos module check."
