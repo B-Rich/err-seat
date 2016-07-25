@@ -440,7 +440,7 @@ class Seat(BotPlugin):
         return "Ran manual pos check."
 
     @botcmd(admin_only=True, hidden=True)
-    def q(self, msg, args):
+    def pos_triggerposmodcheck(self, msg, args):
         """Manually executes the checks on various posmodules"""
         self._poller_check_pos_modules()
         return "Ran manual pos module check."
