@@ -389,10 +389,27 @@ class Seat(BotPlugin):
                 results += 1
                 yield "**Location:** %s **Type:** %s **Corp:** %s **Name:** %s **Hours of fuel left:** %s" % (
                     starbase['moon'], starbase['type'], starbase['corp'], starbase['name'], round(hours_left))
-            if results == 0:
-                yield "Did not found any towers."
-            else:
-                yield "Found %s starbases total." % results
+        if results == 0:
+            yield "Did not found any towers."
+        else:
+            yield "Found %s starbases total." % results
+
+    @botcmd
+    def pos_reinforced(self, msg, args):
+        """Finds all reinforced towers , Usage: !pos reinforced"""
+        if args != '':
+            yield 'Usage: !pos reinforced'
+            return
+        results = 0
+        for starbase in self.get_all_starbases():
+            if starbase['state'] == 3:
+                results += 1
+                yield "%s - %s - %s is reinforced. Timer: %s" % (
+                    starbase['moon'], starbase['type'], starbase['corp'], starbase['stateTimeStamp'])
+        if results == 0:
+            yield "Did not find any reinforced towers."
+        else:
+            yield "Found %s starbases total." % results
 
     @botcmd
     def pos_oos(self, msg, args):
@@ -407,7 +424,7 @@ class Seat(BotPlugin):
                 yield "**Location:** %s **Type:** %s **Corp:** %s **Name:** %s has no strontium." % (
                     starbase['moon'], starbase['type'], starbase['corp'], starbase['name'])
         if results == 0:
-            yield "Did not found any towers without stront."
+            yield "Did not find any towers without stront."
         else:
             yield "Found %s starbases total." % results
 
