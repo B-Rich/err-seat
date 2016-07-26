@@ -122,7 +122,7 @@ class Seat(BotPlugin):
         # check if data is outdated
         outdated = False
         postime = datetime.datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S")
-        if postime < datetime.datetime.utcnow() - datetime.timedelta(hours=12):
+        if postime < datetime.datetime.utcnow() - datetime.timedelta(hours=4):
             outdated = True
         starbase = {
             "id": itemid,
@@ -314,7 +314,6 @@ class Seat(BotPlugin):
                                       "**Siphon:** Possible siphon detected: %s - %s - %s" % (
                                           starbase['moon'], starbase['type'], starbase['corp']))
                             self.pos_warn_siphon(s_id, False)
-                            self.add_module(m_id, mc_amount)
                         # check for full
                         elif mc_amount == m_capacity and module['warn_full'] is True:
                             self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
@@ -327,6 +326,7 @@ class Seat(BotPlugin):
                         # assume emptied
                         elif mc_amount != m_capacity and module['warn_full'] is False:
                             self.module_warn_full(s_id, True)
+                        self.add_module(m_id, mc_amount)
             except:
                 pass
 
