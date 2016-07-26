@@ -11,6 +11,7 @@ class Seat(BotPlugin):
         self.seat_headers = {'X-Token': self.config['SEAT_TOKEN'], 'Accept': 'application/json'}
         self['starbases'] = {}
         self['pocos'] = {}
+        self['modules'] = {}
         self._poller_fetch_starbases()
         self._poller_fetch_pocos()
         self.start_poller(
@@ -33,8 +34,8 @@ class Seat(BotPlugin):
     ####################################################################################################################
     # Configuration
     def get_configuration_template(self):
-        return {'SEAT_TOKEN': '<your_seat_token>', 'SEAT_URL': '<your_seat_url>', 'FUEL_THRESHOLD': '12',
-                'REPORT_POS_CHAN': '<yourchannel>', 'REPORT_REINF_CHAN': '<yourchannel>'}
+        return {'SEAT_TOKEN': '<seat_token>', 'SEAT_URL': '<your_seat_url>', 'FUEL_THRESHOLD': '24',
+                'REPORT_POS_CHAN': '<channel>', 'REPORT_REINF_CHAN': '<channel>'}
 
     ####################################################################################################################
     # Api Calls
@@ -267,7 +268,7 @@ class Seat(BotPlugin):
                           "**Outdated**: %s - %s - %s is outdated, please check corp key" % (
                               starbase['moon'], starbase['type'], starbase['corp']))
                 exit()
-            elif int(fuel_left) < threshold and int(fuel_left) != 0 and starbase['warn_fuel'] is True:
+            elif int(fuel_left) < int(threshold) and int(fuel_left) != 0 and starbase['warn_fuel'] is True:
                 self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                           "**Fuel:** Tower is running out of fuel in %s hours - %s - %s - %s" % (
                               round(fuel_left), starbase['moon'], starbase['type'], starbase['corp'],))
@@ -286,7 +287,7 @@ class Seat(BotPlugin):
                 self.pos_warn_reinf(starbase['posid'], True)
             ## clear warnings
             # assume refilled
-            elif int(fuel_left) > threshold and starbase['warn_fuel'] is False:
+            elif int(fuel_left) > int(threshold) and starbase['warn_fuel'] is False:
                 self.pos_warn_fuel(starbase['id'], True)
             # assume restronted
             elif starbase['strontium'] == 0 and starbase['warn_stront'] is False:
