@@ -96,6 +96,8 @@ class Seat(BotPlugin):
             return False
         elif past_count == actual_count + 100:
             return False
+        elif past_count is None:
+            return False
         else:
             return True
 
@@ -305,7 +307,6 @@ class Seat(BotPlugin):
                         m_location = module['detail']['mapName']
                         modulecontent = self._get_seat_posmod_contents(starbase['corpid'], m_id)
                         mc_amount = modulecontent[0]['quantity']
-                        self.add_module(m_id, mc_amount)
                         stored_amount = self['modules'][m_id]['content']
                         # check siphon fml
                         if self.mcheck_siphon(stored_amount, mc_amount) and module['warn_siphon'] is True:
@@ -313,6 +314,7 @@ class Seat(BotPlugin):
                                       "**Siphon:** Possible siphon detected: %s - %s - %s" % (
                                           starbase['moon'], starbase['type'], starbase['corp']))
                             self.pos_warn_siphon(s_id, False)
+                            self.add_module(m_id, mc_amount)
                         # check for full
                         elif mc_amount == m_capacity and module['warn_full'] is True:
                             self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
