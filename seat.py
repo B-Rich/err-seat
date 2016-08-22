@@ -2,6 +2,7 @@ import requests
 from errbot import BotPlugin, botcmd, cmdfilter
 import datetime
 
+
 class Seat(BotPlugin):
     """Seat API to errbot interface"""
 
@@ -13,6 +14,7 @@ class Seat(BotPlugin):
         self['pocos'] = {}
         self['modules'] = {}
         self._poller_fetch_starbases()
+        self._poller_fetch_posmods()
         self._poller_fetch_pocos()
         self.start_poller(
             1800,
@@ -21,6 +23,10 @@ class Seat(BotPlugin):
         self.start_poller(
             1800,
             self._poller_fetch_pocos
+        )
+        self.start_poller(
+            1800,
+            self._poller_fetch_posmods
         )
         self.start_poller(
             3600,
@@ -101,7 +107,6 @@ class Seat(BotPlugin):
             return False
         else:
             return True
-
 
     ## Data Manipuation
     def add_starbase(self, corpid, corpticker, itemid, name, type, updated_at, onAggression, solarsystem, moon,
@@ -197,10 +202,12 @@ class Seat(BotPlugin):
         self['starbases'] = starbases
 
     def get_all_starbases(self):
-        return self.get('starbases', {}).values()
+        r = self.get('starbases', {}).values()
+        return r
 
     def get_all_pocos(self):
-        return self.get('pocos', {}).values()
+        r = self.get('pocos', {}).values()
+        return r
 
     ## Silence Commands
     def pos_warn_fuel(self, posid, state):
@@ -256,6 +263,20 @@ class Seat(BotPlugin):
                               planetTypeName=poco['planetTypeName'], reinforceHour=poco['reinforceHour'],
                               solarSystemName=poco['solarSystemName'])
 
+    def _poller_fetch_posmods(self):
+        for starbase in self.get_all_starbases():
+            poscontent = self._get_seat_pos_contents(starbase['corpid'], starbase['id'])
+            try:
+                for module in poscontent['modules']:
+                    # 14343 for silo, 17982 for coupling arrays
+                    if module['detail']['typeID'] == 14343 or module['detail']['typeID'] == 17982:
+                        m_id = module['detail']['itemID']
+                        modulecontent = self._get_seat_posmod_contents(starbase['corpid'], m_id)
+                        mc_amount = modulecontent[0]['quantity']
+                        self.add_module(moduleid=m_id, modulecontent=mc_amount)
+            except:
+                pass
+
     def _poller_check_pos(self, thresholdtmp=None):
         """Executes checks on the pos itself"""
         threshold = thresholdtmp if thresholdtmp else self.config['FUEL_THRESHOLD']
@@ -297,7 +318,7 @@ class Seat(BotPlugin):
         """Executes checks on pos modules"""
         for starbase in self.get_all_starbases():
             poscontent = self._get_seat_pos_contents(starbase['corpid'], starbase['id'])
-            try:
+            if 'modules' in poscontent:
                 for module in poscontent['modules']:
                     # 14343 for silo, 17982 for coupling arrays
                     if module['detail']['typeID'] == 14343 or module['detail']['typeID'] == 17982:
@@ -307,29 +328,31 @@ class Seat(BotPlugin):
                         m_name = module['detail']['typeName']
                         m_location = module['detail']['mapName']
                         modulecontent = self._get_seat_posmod_contents(starbase['corpid'], m_id)
-                        mc_amount = modulecontent[0]['quantity']
-                        stored_amount = self['modules'][m_id]['content']
-                        # check siphon fml
-                        if self.mcheck_siphon(stored_amount, mc_amount) and module['warn_siphon'] is True:
-                            self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
-                                      "**Siphon:** Possible siphon detected: %s - %s - %s" % (
-                                          starbase['moon'], starbase['type'], starbase['corp']))
-                            self.pos_warn_siphon(s_id, False)
-                        # check for full
-                        elif mc_amount == m_capacity and module['warn_full'] is True:
-                            self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
-                                      "**Full:** %s - %s - %s - %s is full" % (
-                                          m_name, m_location, starbase['type'], starbase['corp'],))
-                            self.module_warn_full(s_id, False)
-                        # assume siphon killed
-                        elif self.mcheck_siphon(stored_amount, mc_amount) is False and starbase['warn_siphon'] is False:
-                            self.pos_warn_siphon(s_id, True)
-                        # assume emptied
-                        elif mc_amount != m_capacity and module['warn_full'] is False:
-                            self.module_warn_full(s_id, True)
+                        mc_amount = modulecontent[0]['quantity'] if len(modulecontent) else 0
+                        stored_amount = self['modules'][m_id]['content'] if m_id in self['modules'] else 0
+                        stored_module = self['modules'][m_id] if m_id in self['modules'] else None
+                        try:
+                            # check siphon fml
+                            if self.mcheck_siphon(stored_amount, mc_amount) and starbase['warn_siphon'] is True:
+                                self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
+                                          "**Siphon:** Possible siphon detected: %s - %s - %s" % (
+                                              starbase['moon'], starbase['type'], starbase['corp']))
+                                self.pos_warn_siphon(s_id, False)
+                            # check for full
+                            elif mc_amount == m_capacity and stored_module['warn_full'] is True:
+                                self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
+                                          "**Full:** %s - %s - %s - %s is full" % (
+                                              m_name, m_location, starbase['type'], starbase['corp'],))
+                                self.module_warn_full(m_id, False)
+                            # assume siphon killed
+                            elif self.mcheck_siphon(stored_amount, mc_amount) is False and starbase['warn_siphon'] is False:
+                                self.pos_warn_siphon(s_id, True)
+                            # assume emptied
+                            elif mc_amount != m_capacity and stored_module['warn_full'] is False:
+                                self.module_warn_full(m_id, True)
+                        except:
+                            pass
                         self.add_module(m_id, mc_amount)
-            except:
-                pass
 
     ####################################################################################################################
     # bot commands
