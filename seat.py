@@ -103,7 +103,16 @@ class Seat(BotPlugin):
             return False
         elif past_count == actual_count:
             return False
+        # buffer 5 hours
         elif past_count == actual_count + 100:
+            return False
+        elif past_count == actual_count + 200:
+            return False
+        elif past_count == actual_count + 300:
+            return False
+        elif past_count == actual_count + 400:
+            return False
+        elif past_count == actual_count + 500:
             return False
         else:
             return True
@@ -128,7 +137,7 @@ class Seat(BotPlugin):
         # check if data is outdated
         outdated = False
         postime = datetime.datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S")
-        if postime < datetime.datetime.utcnow() - datetime.timedelta(hours=4):
+        if postime < datetime.datetime.utcnow() - datetime.timedelta(hours=5):
             outdated = True
         starbase = {
             "id": itemid,
@@ -354,7 +363,9 @@ class Seat(BotPlugin):
                                 self.module_warn_full(m_id, True)
                         except:
                             pass
-                        self.add_module(m_id, mc_amount)
+                        else:
+                            self.add_module(m_id, mc_amount)
+
 
     ####################################################################################################################
     # bot commands
