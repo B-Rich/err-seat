@@ -98,12 +98,12 @@ class Seat(BotPlugin):
         hours_left = starbase['strontium'] / starbase['baseStrontUsage']
         return hours_left
 
-    def mcheck_siphon(self, past_count, actual_count):
-        if past_count == actual_count:
+    def mcheck_siphon(self, past_count, actual_count, outdated):
+        if outdated is True:
+            return False
+        elif past_count == actual_count:
             return False
         elif past_count == actual_count + 100:
-            return False
-        elif past_count is None:
             return False
         else:
             return True
@@ -322,18 +322,19 @@ class Seat(BotPlugin):
                 for module in poscontent['modules']:
                     # 14343 for silo, 17982 for coupling arrays
                     if module['detail']['typeID'] == 14343 or module['detail']['typeID'] == 17982:
-                        m_id = module['detail']['itemID']
-                        s_id = starbase['id']
-                        m_capacity = module['detail']['capacity']
-                        m_name = module['detail']['typeName']
-                        m_location = module['detail']['mapName']
-                        modulecontent = self._get_seat_posmod_contents(starbase['corpid'], m_id)
-                        mc_amount = modulecontent[0]['quantity'] if len(modulecontent) else 0
-                        stored_amount = self['modules'][m_id]['content'] if m_id in self['modules'] else 0
-                        stored_module = self['modules'][m_id] if m_id in self['modules'] else None
                         try:
+                            m_id = module['detail']['itemID']
+                            s_id = starbase['id']
+                            m_capacity = module['detail']['capacity']
+                            m_name = module['detail']['typeName']
+                            m_location = module['detail']['mapName']
+                            modulecontent = self._get_seat_posmod_contents(starbase['corpid'], m_id)
+                            mc_amount = modulecontent[0]['quantity']
+                            stored_amount = self['modules'][m_id]['content']
+                            stored_module = self['modules'][m_id]
                             # check siphon fml
-                            if self.mcheck_siphon(stored_amount, mc_amount) and starbase['warn_siphon'] is True:
+                            if self.mcheck_siphon(stored_amount, mc_amount, starbase['outdated']) and starbase[
+                                'warn_siphon'] is True:
                                 self.send(self.build_identifier(self.config['REPORT_POS_CHAN']),
                                           "**Siphon:** Possible siphon detected: %s - %s - %s" % (
                                               starbase['moon'], starbase['type'], starbase['corp']))
@@ -345,7 +346,8 @@ class Seat(BotPlugin):
                                               m_name, m_location, starbase['type'], starbase['corp'],))
                                 self.module_warn_full(m_id, False)
                             # assume siphon killed
-                            elif self.mcheck_siphon(stored_amount, mc_amount) is False and starbase['warn_siphon'] is False:
+                            elif self.mcheck_siphon(stored_amount, mc_amount, starbase['outdated']) is False and \
+                                            starbase['warn_siphon'] is False:
                                 self.pos_warn_siphon(s_id, True)
                             # assume emptied
                             elif mc_amount != m_capacity and stored_module['warn_full'] is False:
